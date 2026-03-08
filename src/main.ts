@@ -129,24 +129,44 @@ canvas.addEventListener('pointerdown', (e) => {
 
   if (phase === 'RESULT') {
     const result = game.getResult();
-    if (result && result.won) {
-      // Save progress and go to level select
-      const levelId = currentLevelIndex + 1;
+    if (!result) return;
+
+    const worldPos = canvasToWorld(e.clientX, e.clientY);
+    const uiRenderer = game.getUIRenderer();
+    const button = uiRenderer.getResultButtonTapped(worldPos.x, worldPos.y, result);
+
+    if (!button) return; // Tap outside buttons — ignore
+
+    const levelId = currentLevelIndex + 1;
+
+    if (result.won) {
       gameState.completeLevel(levelId, result.stars);
-      game.setPhase('LEVEL_SELECT');
-      inputHandler = null;
+      if (button === 'main') {
+        // NEXT level
+        currentLevelIndex++;
+        const nextLevel = getLevel(currentLevelIndex + 1);
+        game.transitionToLevel(nextLevel);
+        inputHandler = new InputHandler(nextLevel.startPosition, nextLevel.maxLineLength, canvasToWorld);
+        inputHandler.setOnDrawingComplete((path) => game.startPlayback(path));
+      } else {
+        // RETRY same level
+        const level = getLevel(levelId);
+        game.transitionToLevel(level);
+        inputHandler = new InputHandler(level.startPosition, level.maxLineLength, canvasToWorld);
+        inputHandler.setOnDrawingComplete((path) => game.startPlayback(path));
+      }
     } else {
-      // Lose: retry same level
-      const level = getLevel(currentLevelIndex + 1);
-      game.transitionToLevel(level);
-      inputHandler = new InputHandler(
-        level.startPosition,
-        level.maxLineLength,
-        canvasToWorld
-      );
-      inputHandler.setOnDrawingComplete((path) => {
-        game.startPlayback(path);
-      });
+      if (button === 'main') {
+        // RETRY
+        const level = getLevel(levelId);
+        game.transitionToLevel(level);
+        inputHandler = new InputHandler(level.startPosition, level.maxLineLength, canvasToWorld);
+        inputHandler.setOnDrawingComplete((path) => game.startPlayback(path));
+      } else {
+        // LEVELS
+        game.setPhase('LEVEL_SELECT');
+        inputHandler = null;
+      }
     }
   }
 });

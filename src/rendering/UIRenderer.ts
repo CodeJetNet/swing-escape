@@ -31,10 +31,13 @@ export class UIRenderer {
     ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     const centerY = WORLD_HEIGHT / 2 - 40;
     ctx.textAlign = 'center';
+
     if (result.won) {
       ctx.fillStyle = COLORS.successParticle;
       ctx.font = 'bold 48px monospace';
       ctx.fillText('LANDED!', WORLD_WIDTH / 2, centerY);
+
+      // Stars
       for (let i = 0; i < 3; i++) {
         const starDelay = i * 0.2;
         if (animProgress > starDelay) {
@@ -50,10 +53,28 @@ export class UIRenderer {
       ctx.font = 'bold 48px monospace';
       ctx.fillText('SPLAT!', WORLD_WIDTH / 2, centerY);
     }
+
+    // Buttons appear after animation
     if (animProgress > 0.8) {
+      // Large center button: RETRY (on death) or NEXT (on win)
+      const btnY = centerY + 100;
+      const btnWidth = 160;
+      const btnHeight = 44;
+      const mainLabel = result.won ? 'NEXT' : 'RETRY';
+      const mainColor = result.won ? COLORS.successParticle : COLORS.lava;
+
+      // Main button
+      ctx.fillStyle = mainColor;
+      ctx.fillRect(WORLD_WIDTH / 2 - btnWidth / 2, btnY - btnHeight / 2, btnWidth, btnHeight);
+      ctx.fillStyle = COLORS.text;
+      ctx.font = 'bold 20px monospace';
+      ctx.fillText(mainLabel, WORLD_WIDTH / 2, btnY + 7);
+
+      // Small secondary button: LEVELS (on death) or RETRY (on win)
+      const secLabel = result.won ? 'RETRY' : 'LEVELS';
       ctx.fillStyle = COLORS.textSecondary;
-      ctx.font = '16px monospace';
-      ctx.fillText('Tap to continue', WORLD_WIDTH / 2, centerY + 100);
+      ctx.font = '14px monospace';
+      ctx.fillText(secLabel, WORLD_WIDTH / 2, btnY + 50);
     }
   }
 
@@ -155,6 +176,37 @@ export class UIRenderer {
         return i;
       }
     }
+    return null;
+  }
+
+  getResultButtonTapped(
+    x: number, y: number, result: GameResult
+  ): 'main' | 'secondary' | null {
+    const centerY = WORLD_HEIGHT / 2 - 40;
+    const btnY = centerY + 100;
+    const btnWidth = 160;
+    const btnHeight = 44;
+
+    // Main button
+    if (
+      x >= WORLD_WIDTH / 2 - btnWidth / 2 &&
+      x <= WORLD_WIDTH / 2 + btnWidth / 2 &&
+      y >= btnY - btnHeight / 2 &&
+      y <= btnY + btnHeight / 2
+    ) {
+      return 'main';
+    }
+
+    // Secondary button (text link area)
+    if (
+      x >= WORLD_WIDTH / 2 - 60 &&
+      x <= WORLD_WIDTH / 2 + 60 &&
+      y >= btnY + 35 &&
+      y <= btnY + 55
+    ) {
+      return 'secondary';
+    }
+
     return null;
   }
 
