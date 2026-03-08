@@ -3,8 +3,9 @@
 import { WORLD_WIDTH, WORLD_HEIGHT, COLORS } from './utils/constants';
 import { Game } from './game/Game';
 import { InputHandler } from './game/InputHandler';
-import { Vector2 } from './game/types';
+import { LevelConfig, Vector2 } from './game/types';
 import { levels } from './levels/levels';
+import { LevelGenerator } from './levels/LevelGenerator';
 import { GameState } from './state/GameState';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -40,6 +41,13 @@ function canvasToWorld(clientX: number, clientY: number): Vector2 {
 const gameState = new GameState();
 let currentLevelIndex = gameState.getCurrentLevel() - 1;
 
+function getLevel(id: number): LevelConfig {
+  if (id <= levels.length) {
+    return levels[id - 1];
+  }
+  return LevelGenerator.generate(id, id - levels.length);
+}
+
 const game = new Game(ctx);
 game.setGameState(gameState);
 let inputHandler: InputHandler | null = null;
@@ -50,11 +58,8 @@ function vibrate(pattern: number | number[]) {
 }
 
 function loadCurrentLevel() {
-  // Clamp to available levels
-  if (currentLevelIndex >= levels.length) {
-    currentLevelIndex = levels.length - 1;
-  }
-  const level = levels[currentLevelIndex];
+  const levelId = currentLevelIndex + 1;
+  const level = getLevel(levelId);
   game.loadLevel(level);
   inputHandler = new InputHandler(
     level.startPosition,
@@ -92,11 +97,12 @@ canvas.addEventListener('pointerdown', (e) => {
       return;
     }
 
-    const tappedIndex = uiRenderer.getLevelAtPosition(worldPos.x, worldPos.y, levels.length);
+    const totalLevels = Math.max(levels.length, gameState.getCurrentLevel());
+    const tappedIndex = uiRenderer.getLevelAtPosition(worldPos.x, worldPos.y, totalLevels);
     if (tappedIndex !== null) {
-      const level = levels[tappedIndex];
+      const levelId = tappedIndex + 1;
       // Only allow unlocked levels
-      if (level.id <= gameState.getCurrentLevel()) {
+      if (levelId <= gameState.getCurrentLevel()) {
         currentLevelIndex = tappedIndex;
         loadCurrentLevel();
       }
@@ -112,8 +118,8 @@ canvas.addEventListener('pointerdown', (e) => {
     const result = game.getResult();
     if (result && result.won) {
       // Save progress and go to level select
-      const level = levels[currentLevelIndex];
-      gameState.completeLevel(level.id, result.stars);
+      const levelId = currentLevelIndex + 1;
+      gameState.completeLevel(levelId, result.stars);
       game.setPhase('LEVEL_SELECT');
       inputHandler = null;
     } else {
