@@ -29,52 +29,149 @@ export class UIRenderer {
   renderResult(ctx: CanvasRenderingContext2D, result: GameResult, animProgress: number) {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    const centerY = WORLD_HEIGHT / 2 - 40;
+    const centerY = WORLD_HEIGHT / 2 - 60;
     ctx.textAlign = 'center';
 
     if (result.won) {
-      ctx.fillStyle = COLORS.successParticle;
-      ctx.font = 'bold 48px monospace';
-      ctx.fillText('LANDED!', WORLD_WIDTH / 2, centerY);
+      // Score ticker
+      const tickerLines: { label: string; score: string; color: string }[] = [];
 
-      // Stars
-      for (let i = 0; i < 3; i++) {
-        const starDelay = i * 0.2;
-        if (animProgress > starDelay) {
+      // Landing bonus
+      const landingBonus = result.landingAccuracy > 0.75 ? 50 : 30;
+      tickerLines.push({ label: 'Landing', score: `+${landingBonus}`, color: COLORS.successParticle });
+
+      // Combo events (summarized by type)
+      const typeCounts: Record<string, { count: number; total: number }> = {};
+      for (const e of result.comboEvents) {
+        if (!typeCounts[e.label]) typeCounts[e.label] = { count: 0, total: 0 };
+        typeCounts[e.label].count++;
+        typeCounts[e.label].total += e.points;
+      }
+      for (const [label, data] of Object.entries(typeCounts)) {
+        tickerLines.push({
+          label: `${label} x${data.count}`,
+          score: `+${data.total}`,
+          color: '#4ecdc4',
+        });
+      }
+
+      // Efficiency bonus
+      const efficiencyBonus = result.totalScore - result.comboScore - landingBonus;
+      if (efficiencyBonus > 0) {
+        tickerLines.push({ label: 'Efficiency', score: `+${efficiencyBonus}`, color: '#a8e6cf' });
+      }
+
+      // Render ticker lines based on animation progress
+      const lineStartTime = 0.2;
+      const lineInterval = 0.1;
+
+      for (let i = 0; i < tickerLines.length; i++) {
+        const lineProgress = (animProgress - lineStartTime - i * lineInterval) / lineInterval;
+        if (lineProgress < 0) break;
+
+        const alpha = Math.min(lineProgress, 1);
+        const line = tickerLines[i];
+        const y = centerY + i * 28;
+
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = COLORS.textSecondary;
+        ctx.font = '16px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(line.label, WORLD_WIDTH / 2 - 100, y);
+
+        ctx.fillStyle = line.color;
+        ctx.textAlign = 'right';
+        ctx.fillText(line.score, WORLD_WIDTH / 2 + 100, y);
+      }
+
+      // Total line
+      const totalTime = lineStartTime + tickerLines.length * lineInterval + 0.1;
+      if (animProgress > totalTime) {
+        const totalAlpha = Math.min((animProgress - totalTime) / 0.1, 1);
+        ctx.globalAlpha = totalAlpha;
+
+        // Divider
+        const divY = centerY + tickerLines.length * 28 + 5;
+        ctx.strokeStyle = COLORS.textSecondary;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(WORLD_WIDTH / 2 - 100, divY);
+        ctx.lineTo(WORLD_WIDTH / 2 + 100, divY);
+        ctx.stroke();
+
+        // Total
+        const totalY = divY + 30;
+        ctx.fillStyle = COLORS.text;
+        ctx.font = 'bold 24px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`TOTAL: ${result.totalScore}`, WORLD_WIDTH / 2, totalY);
+
+        // Best score
+        const bestY = totalY + 25;
+        if (result.isNewBest) {
+          ctx.fillStyle = COLORS.star;
+          ctx.font = 'bold 16px monospace';
+          ctx.fillText('NEW BEST!', WORLD_WIDTH / 2, bestY);
+        } else if (result.bestScore > 0) {
+          ctx.fillStyle = COLORS.textSecondary;
+          ctx.font = '14px monospace';
+          ctx.fillText(`BEST: ${result.bestScore}`, WORLD_WIDTH / 2, bestY);
+        }
+
+        // Stars
+        const starsY = bestY + 30;
+        for (let i = 0; i < 3; i++) {
           const starX = WORLD_WIDTH / 2 + (i - 1) * 40;
           const filled = i < result.stars;
           ctx.fillStyle = filled ? COLORS.star : COLORS.starEmpty;
           ctx.font = '32px monospace';
-          ctx.fillText(filled ? '\u2605' : '\u2606', starX, centerY + 50);
+          ctx.textAlign = 'center';
+          ctx.fillText(filled ? '\u2605' : '\u2606', starX, starsY);
         }
       }
+
+      ctx.globalAlpha = 1;
+
+      // Buttons after ticker complete
+      const buttonsTime = totalTime + 0.15;
+      if (animProgress > buttonsTime) {
+        const btnY = WORLD_HEIGHT - 80;
+        const btnWidth = 160;
+        const btnHeight = 44;
+
+        ctx.fillStyle = COLORS.successParticle;
+        ctx.fillRect(WORLD_WIDTH / 2 - btnWidth / 2, btnY - btnHeight / 2, btnWidth, btnHeight);
+        ctx.fillStyle = COLORS.text;
+        ctx.font = 'bold 20px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('NEXT', WORLD_WIDTH / 2, btnY + 7);
+
+        ctx.fillStyle = COLORS.textSecondary;
+        ctx.font = '14px monospace';
+        ctx.fillText('RETRY', WORLD_WIDTH / 2, btnY + 40);
+      }
     } else {
+      // Death result — keep simple
       ctx.fillStyle = COLORS.lava;
       ctx.font = 'bold 48px monospace';
-      ctx.fillText('SPLAT!', WORLD_WIDTH / 2, centerY);
-    }
+      ctx.fillText('SPLAT!', WORLD_WIDTH / 2, centerY + 40);
 
-    // Buttons appear after animation
-    if (animProgress > 0.8) {
-      // Large center button: RETRY (on death) or NEXT (on win)
-      const btnY = centerY + 100;
-      const btnWidth = 160;
-      const btnHeight = 44;
-      const mainLabel = result.won ? 'NEXT' : 'RETRY';
-      const mainColor = result.won ? COLORS.successParticle : COLORS.lava;
+      if (animProgress > 0.8) {
+        const btnY = centerY + 120;
+        const btnWidth = 160;
+        const btnHeight = 44;
 
-      // Main button
-      ctx.fillStyle = mainColor;
-      ctx.fillRect(WORLD_WIDTH / 2 - btnWidth / 2, btnY - btnHeight / 2, btnWidth, btnHeight);
-      ctx.fillStyle = COLORS.text;
-      ctx.font = 'bold 20px monospace';
-      ctx.fillText(mainLabel, WORLD_WIDTH / 2, btnY + 7);
+        ctx.fillStyle = COLORS.lava;
+        ctx.fillRect(WORLD_WIDTH / 2 - btnWidth / 2, btnY - btnHeight / 2, btnWidth, btnHeight);
+        ctx.fillStyle = COLORS.text;
+        ctx.font = 'bold 20px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('RETRY', WORLD_WIDTH / 2, btnY + 7);
 
-      // Small secondary button: LEVELS (on death) or RETRY (on win)
-      const secLabel = result.won ? 'RETRY' : 'LEVELS';
-      ctx.fillStyle = COLORS.textSecondary;
-      ctx.font = '14px monospace';
-      ctx.fillText(secLabel, WORLD_WIDTH / 2, btnY + 50);
+        ctx.fillStyle = COLORS.textSecondary;
+        ctx.font = '14px monospace';
+        ctx.fillText('LEVELS', WORLD_WIDTH / 2, btnY + 40);
+      }
     }
   }
 
@@ -182,29 +279,30 @@ export class UIRenderer {
   getResultButtonTapped(
     x: number, y: number, result: GameResult
   ): 'main' | 'secondary' | null {
-    const centerY = WORLD_HEIGHT / 2 - 40;
-    const btnY = centerY + 100;
     const btnWidth = 160;
     const btnHeight = 44;
 
-    // Main button
-    if (
-      x >= WORLD_WIDTH / 2 - btnWidth / 2 &&
-      x <= WORLD_WIDTH / 2 + btnWidth / 2 &&
-      y >= btnY - btnHeight / 2 &&
-      y <= btnY + btnHeight / 2
-    ) {
-      return 'main';
-    }
-
-    // Secondary button (text link area)
-    if (
-      x >= WORLD_WIDTH / 2 - 60 &&
-      x <= WORLD_WIDTH / 2 + 60 &&
-      y >= btnY + 35 &&
-      y <= btnY + 55
-    ) {
-      return 'secondary';
+    if (result.won) {
+      const btnY = WORLD_HEIGHT - 80;
+      if (x >= WORLD_WIDTH / 2 - btnWidth / 2 && x <= WORLD_WIDTH / 2 + btnWidth / 2 &&
+          y >= btnY - btnHeight / 2 && y <= btnY + btnHeight / 2) {
+        return 'main';
+      }
+      if (x >= WORLD_WIDTH / 2 - 60 && x <= WORLD_WIDTH / 2 + 60 &&
+          y >= btnY + 25 && y <= btnY + 50) {
+        return 'secondary';
+      }
+    } else {
+      const centerY = WORLD_HEIGHT / 2 - 60;
+      const btnY = centerY + 120;
+      if (x >= WORLD_WIDTH / 2 - btnWidth / 2 && x <= WORLD_WIDTH / 2 + btnWidth / 2 &&
+          y >= btnY - btnHeight / 2 && y <= btnY + btnHeight / 2) {
+        return 'main';
+      }
+      if (x >= WORLD_WIDTH / 2 - 60 && x <= WORLD_WIDTH / 2 + 60 &&
+          y >= btnY + 25 && y <= btnY + 50) {
+        return 'secondary';
+      }
     }
 
     return null;

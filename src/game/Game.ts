@@ -41,6 +41,7 @@ export class Game {
   private audio: AudioManager = new AudioManager();
   private comboTracker: ComboTracker = new ComboTracker();
   private playbackFrameCount = 0;
+  private lastTickerLineCount = 0;
 
   private result: GameResult | null = null;
   private resultStartTime: number = 0;
@@ -323,6 +324,7 @@ export class Game {
     }
 
     this.resultStartTime = this.gameTime;
+    this.lastTickerLineCount = 0;
     this.phase = 'RESULT';
   }
 
@@ -597,7 +599,20 @@ export class Game {
   private renderResultOverlay(ctx: CanvasRenderingContext2D) {
     if (!this.result) return;
     const elapsed = this.gameTime - this.resultStartTime;
-    const animProgress = Math.min(elapsed / 1000, 1);
+    const duration = this.result.won ? 3000 : 1000;
+    const animProgress = Math.min(elapsed / duration, 1);
+
+    // Play dings as ticker lines appear (wins only)
+    if (this.result.won) {
+      const lineStartTime = 0.2;
+      const lineInterval = 0.1;
+      const currentLineCount = Math.floor(Math.max(0, animProgress - lineStartTime) / lineInterval) + 1;
+      if (currentLineCount > this.lastTickerLineCount) {
+        this.audio.playScoreDing();
+        this.lastTickerLineCount = currentLineCount;
+      }
+    }
+
     this.uiRenderer.renderResult(ctx, this.result, animProgress);
   }
 }
