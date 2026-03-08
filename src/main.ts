@@ -8,6 +8,10 @@ import { levels } from './levels/levels';
 import { LevelGenerator } from './levels/LevelGenerator';
 import { GameState } from './state/GameState';
 
+// Prevent default touch behaviors
+document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 
@@ -104,7 +108,16 @@ canvas.addEventListener('pointerdown', (e) => {
       // Only allow unlocked levels
       if (levelId <= gameState.getCurrentLevel()) {
         currentLevelIndex = tappedIndex;
-        loadCurrentLevel();
+        const level = getLevel(levelId);
+        game.transitionToLevel(level);
+        inputHandler = new InputHandler(
+          level.startPosition,
+          level.maxLineLength,
+          canvasToWorld
+        );
+        inputHandler.setOnDrawingComplete((path) => {
+          game.startPlayback(path);
+        });
       }
     }
     return;
@@ -124,7 +137,16 @@ canvas.addEventListener('pointerdown', (e) => {
       inputHandler = null;
     } else {
       // Lose: retry same level
-      loadCurrentLevel();
+      const level = getLevel(currentLevelIndex + 1);
+      game.transitionToLevel(level);
+      inputHandler = new InputHandler(
+        level.startPosition,
+        level.maxLineLength,
+        canvasToWorld
+      );
+      inputHandler.setOnDrawingComplete((path) => {
+        game.startPlayback(path);
+      });
     }
   }
 });

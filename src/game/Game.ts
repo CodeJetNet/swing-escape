@@ -46,6 +46,10 @@ export class Game {
   private landedOnPad = false;
   private gameStateRef: GameState | null = null;
 
+  private transitionAlpha: number = 0;
+  private transitionState: 'none' | 'fadeOut' | 'fadeIn' = 'none';
+  private pendingLevelLoad: LevelConfig | null = null;
+
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
   }
@@ -236,8 +240,35 @@ export class Game {
     this.phase = 'PLAYBACK';
   }
 
+  transitionToLevel(level: LevelConfig) {
+    this.pendingLevelLoad = level;
+    this.transitionState = 'fadeOut';
+  }
+
   update(deltaMs: number) {
     this.gameTime += deltaMs;
+
+    // Handle level transition animation
+    if (this.transitionState === 'fadeOut') {
+      this.transitionAlpha += deltaMs / 300;
+      if (this.transitionAlpha >= 1) {
+        this.transitionAlpha = 1;
+        if (this.pendingLevelLoad) {
+          this.loadLevel(this.pendingLevelLoad);
+          this.pendingLevelLoad = null;
+        }
+        this.transitionState = 'fadeIn';
+      }
+      return;
+    }
+    if (this.transitionState === 'fadeIn') {
+      this.transitionAlpha -= deltaMs / 300;
+      if (this.transitionAlpha <= 0) {
+        this.transitionAlpha = 0;
+        this.transitionState = 'none';
+      }
+      return;
+    }
 
     // Update obstacle renderer for lava animation
     this.obstacleRenderer.update(deltaMs);
@@ -362,6 +393,12 @@ export class Game {
         this.renderLevel(ctx);
         this.renderResultOverlay(ctx);
         break;
+    }
+
+    // Transition overlay
+    if (this.transitionAlpha > 0) {
+      ctx.fillStyle = `rgba(26, 26, 46, ${this.transitionAlpha})`;
+      ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     }
   }
 
