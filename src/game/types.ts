@@ -1,6 +1,6 @@
 // src/game/types.ts
 
-export type GamePhase = 'MENU' | 'DRAWING' | 'PLAYBACK' | 'RESULT';
+export type GamePhase = 'MENU' | 'LEVEL_SELECT' | 'DRAWING' | 'PLAYBACK' | 'RESULT';
 
 export interface Vector2 {
   x: number;

@@ -13,6 +13,8 @@ import { UIRenderer } from '../rendering/UIRenderer';
 import { EffectsRenderer } from '../rendering/EffectsRenderer';
 import { pathLength, distance } from '../utils/math';
 import { AudioManager } from '../audio/AudioManager';
+import { GameState } from '../state/GameState';
+import { levels as allLevels } from '../levels/levels';
 
 function vibrate(pattern: number | number[]) {
   if (navigator.vibrate) navigator.vibrate(pattern);
@@ -42,9 +44,14 @@ export class Game {
   private gameTime: number = 0;
   private fuelFraction: number = 1;
   private landedOnPad = false;
+  private gameStateRef: GameState | null = null;
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
+  }
+
+  setGameState(state: GameState) {
+    this.gameStateRef = state;
   }
 
   initAudio() {
@@ -73,6 +80,10 @@ export class Game {
 
   getEffects(): EffectsRenderer {
     return this.effects;
+  }
+
+  getUIRenderer(): UIRenderer {
+    return this.uiRenderer;
   }
 
   loadLevel(level: LevelConfig) {
@@ -246,6 +257,8 @@ export class Game {
     switch (this.phase) {
       case 'MENU':
         break;
+      case 'LEVEL_SELECT':
+        break;
       case 'DRAWING':
         // Step physics so ragdoll hangs naturally
         if (this.physicsWorld) {
@@ -328,6 +341,9 @@ export class Game {
       case 'MENU':
         this.renderMenu(ctx);
         break;
+      case 'LEVEL_SELECT':
+        this.renderLevelSelect(ctx);
+        break;
       case 'DRAWING':
         this.renderLevel(ctx);
         if (this.currentLevel) {
@@ -358,6 +374,20 @@ export class Game {
     ctx.font = '18px monospace';
     ctx.fillStyle = COLORS.textSecondary;
     ctx.fillText('Tap to play', WORLD_WIDTH / 2, WORLD_HEIGHT / 2 + 20);
+  }
+
+  private renderLevelSelect(ctx: CanvasRenderingContext2D) {
+    const levelsData = allLevels.map((level) => ({
+      id: level.id,
+      stars: this.gameStateRef ? this.gameStateRef.getStars(level.id) : 0,
+      unlocked: this.gameStateRef
+        ? level.id <= this.gameStateRef.getCurrentLevel()
+        : level.id === 1,
+    }));
+    const endlessModeUnlocked = this.gameStateRef
+      ? this.gameStateRef.getCurrentLevel() > allLevels.length
+      : false;
+    this.uiRenderer.renderLevelSelect(ctx, levelsData, endlessModeUnlocked);
   }
 
   private renderLevel(ctx: CanvasRenderingContext2D) {

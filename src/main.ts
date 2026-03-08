@@ -41,6 +41,7 @@ const gameState = new GameState();
 let currentLevelIndex = gameState.getCurrentLevel() - 1;
 
 const game = new Game(ctx);
+game.setGameState(gameState);
 let inputHandler: InputHandler | null = null;
 let audioInitialized = false;
 
@@ -77,8 +78,29 @@ canvas.addEventListener('pointerdown', (e) => {
   const phase = game.getPhase();
 
   if (phase === 'MENU') {
-    // Tap to start: load current level and transition to DRAWING
-    loadCurrentLevel();
+    // Tap to go to level select
+    game.setPhase('LEVEL_SELECT');
+    return;
+  }
+
+  if (phase === 'LEVEL_SELECT') {
+    const worldPos = canvasToWorld(e.clientX, e.clientY);
+    const uiRenderer = game.getUIRenderer();
+
+    if (uiRenderer.isBackButtonTapped(worldPos.x, worldPos.y)) {
+      game.setPhase('MENU');
+      return;
+    }
+
+    const tappedIndex = uiRenderer.getLevelAtPosition(worldPos.x, worldPos.y, levels.length);
+    if (tappedIndex !== null) {
+      const level = levels[tappedIndex];
+      // Only allow unlocked levels
+      if (level.id <= gameState.getCurrentLevel()) {
+        currentLevelIndex = tappedIndex;
+        loadCurrentLevel();
+      }
+    }
     return;
   }
 
@@ -89,18 +111,11 @@ canvas.addEventListener('pointerdown', (e) => {
   if (phase === 'RESULT') {
     const result = game.getResult();
     if (result && result.won) {
-      // Save progress and advance to next level
+      // Save progress and go to level select
       const level = levels[currentLevelIndex];
       gameState.completeLevel(level.id, result.stars);
-      currentLevelIndex++;
-      if (currentLevelIndex >= levels.length) {
-        // All levels complete, go back to menu
-        currentLevelIndex = 0;
-        game.setPhase('MENU');
-        inputHandler = null;
-      } else {
-        loadCurrentLevel();
-      }
+      game.setPhase('LEVEL_SELECT');
+      inputHandler = null;
     } else {
       // Lose: retry same level
       loadCurrentLevel();
