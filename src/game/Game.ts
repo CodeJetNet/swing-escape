@@ -35,6 +35,7 @@ export class Game {
   private effects: EffectsRenderer = new EffectsRenderer();
   private loadedLevel: LoadedLevel | null = null;
   private drawnPath: Vector2[] = [];
+  private ghostPath: Vector2[] = [];
   private barConstraintsRemoved = false;
   private audio: AudioManager = new AudioManager();
   private playbackFrameCount = 0;
@@ -83,6 +84,10 @@ export class Game {
     this.fuelFraction = fraction;
   }
 
+  getGhostPath(): Vector2[] {
+    return this.ghostPath;
+  }
+
   getEffects(): EffectsRenderer {
     return this.effects;
   }
@@ -99,6 +104,15 @@ export class Game {
     }
     if (this.physicsWorld) {
       this.physicsWorld.clear();
+    }
+
+    // Save or clear ghost path
+    if (this.currentLevel && level.id === this.currentLevel.id) {
+      // Retry same level — save current path as ghost
+      this.ghostPath = [...this.drawnPath];
+    } else {
+      // New level — clear ghost
+      this.ghostPath = [];
     }
 
     this.currentLevel = level;

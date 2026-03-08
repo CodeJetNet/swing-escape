@@ -213,8 +213,25 @@ function loop(time: number) {
 
   game.render();
 
-  // Draw path during DRAWING and PLAYBACK phases
+  // Draw ghost path and active path during DRAWING and PLAYBACK phases
   const phase = game.getPhase();
+  if ((phase === 'DRAWING' || phase === 'PLAYBACK')) {
+    const ghostPath = game.getGhostPath();
+    if (ghostPath.length > 1) {
+      ctx.strokeStyle = COLORS.pathGhost;
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.moveTo(ghostPath[0].x, ghostPath[0].y);
+      for (let i = 1; i < ghostPath.length; i++) {
+        ctx.lineTo(ghostPath[i].x, ghostPath[i].y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
   if ((phase === 'DRAWING' || phase === 'PLAYBACK') && inputHandler) {
     const path = inputHandler.getPath();
     renderPath(ctx, path);
