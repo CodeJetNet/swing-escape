@@ -306,7 +306,7 @@ export class Game {
     const comboEvents = this.comboTracker.getEvents();
     const landingBonus = won ? (landingAccuracy > 0.75 ? 50 : 30) : 0;
     const efficiencyBonus = won && this.currentLevel
-      ? Math.max(0, Math.round(30 * (1 - (lineLen - this.currentLevel.parLineLength) / this.currentLevel.parLineLength)))
+      ? Math.min(30, Math.max(0, Math.round(30 * (1 - (lineLen - this.currentLevel.parLineLength) / this.currentLevel.parLineLength))))
       : 0;
     const totalScore = comboScore + landingBonus + efficiencyBonus;
 
@@ -642,10 +642,27 @@ export class Game {
     if (this.result.won) {
       const lineStartTime = 0.2;
       const lineInterval = 0.1;
-      const currentLineCount = Math.floor(Math.max(0, animProgress - lineStartTime) / lineInterval) + 1;
+
+      // Count actual ticker lines
+      const landingBonus = this.result.landingAccuracy > 0.75 ? 50 : 30;
+      const comboLabels = new Set(this.result.comboEvents.map(e => e.label));
+      const efficiencyBonus = this.result.totalScore - this.result.comboScore - landingBonus;
+      const totalLines = 1 + comboLabels.size + (efficiencyBonus > 0 ? 1 : 0);
+
+      const currentLineCount = Math.min(
+        Math.floor(Math.max(0, animProgress - lineStartTime) / lineInterval) + 1,
+        totalLines
+      );
       if (currentLineCount > this.lastTickerLineCount) {
         this.audio.playScoreDing();
         this.lastTickerLineCount = currentLineCount;
+      }
+
+      // Flourish when total appears
+      const totalTime = lineStartTime + totalLines * lineInterval + 0.1;
+      if (animProgress > totalTime && this.lastTickerLineCount <= totalLines) {
+        this.audio.playScoreFlourish();
+        this.lastTickerLineCount = totalLines + 100; // Prevent replaying
       }
     }
 

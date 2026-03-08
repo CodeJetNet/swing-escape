@@ -20,7 +20,6 @@ export class ComboTracker {
 
   // Flip detection state
   private headWasBelowFeet = false;
-  private hasCompletedFlip = false;
 
   // Speed burst state
   private speedBurstTimer = 0;
@@ -36,7 +35,6 @@ export class ComboTracker {
     this.lastEventTime = 0;
     this.currentTime = 0;
     this.headWasBelowFeet = false;
-    this.hasCompletedFlip = false;
     this.speedBurstTimer = 0;
     this.nearMissCooldowns.clear();
   }
@@ -66,15 +64,8 @@ export class ComboTracker {
     if (headBelowFeet && !this.headWasBelowFeet) {
       this.headWasBelowFeet = true;
     } else if (!headBelowFeet && this.headWasBelowFeet) {
+      // Head came back above feet — full rotation
       this.headWasBelowFeet = false;
-      if (!this.hasCompletedFlip) {
-        this.hasCompletedFlip = true;
-        const midPoint = {
-          x: (headPos.x + feetPos.x) / 2,
-          y: (headPos.y + feetPos.y) / 2,
-        };
-        return this.addEvent('flip', midPoint);
-      }
       return this.addEvent('flip', {
         x: (headPos.x + feetPos.x) / 2,
         y: (headPos.y + feetPos.y) / 2,
