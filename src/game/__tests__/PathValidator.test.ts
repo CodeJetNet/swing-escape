@@ -28,6 +28,7 @@ describe('PathValidator', () => {
   it('reports fuel fraction correctly', () => {
     const v = new PathValidator(100);
     const path = [{ x: 0, y: 0 }, { x: 50, y: 0 }];
+    v.pointAdded(path);
     expect(v.fuelFraction(path)).toBe(0.5);
   });
 

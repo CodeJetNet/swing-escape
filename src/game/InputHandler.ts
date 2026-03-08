@@ -45,6 +45,7 @@ export class InputHandler {
     const worldPoint = this.canvasToWorld(clientX, clientY);
     if (this.validator.canAddPoint(this.path, worldPoint)) {
       this.path.push(worldPoint);
+      this.validator.pointAdded(this.path);
     }
   }
 
