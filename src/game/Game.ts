@@ -181,6 +181,17 @@ export class Game {
             this.transitionToResult();
           }
         }
+        if (labels.includes('ground') || labels.includes('landingPadFloor')) {
+          // Hit ground after release — missed the landing pad
+          if (this.phase === 'PLAYBACK' && this.barConstraintsRemoved && !this.landedOnPad) {
+            const collisionPoint = this.ragdoll?.getFeetPosition() || { x: 0, y: 0 };
+            this.effects.spawnCrashParticles(collisionPoint);
+            this.audio.playThud();
+            vibrate(200);
+            this.ragdoll?.goLoose();
+            this.transitionToResult();
+          }
+        }
       }
     };
 
