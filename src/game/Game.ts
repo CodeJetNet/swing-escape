@@ -46,6 +46,7 @@ export class Game {
   private landedOnPad = false;
   private gameStateRef: GameState | null = null;
 
+  private collisionHandler: ((event: Matter.IEventCollision<Matter.Engine>) => void) | null = null;
   private transitionAlpha: number = 0;
   private transitionState: 'none' | 'fadeOut' | 'fadeIn' = 'none';
   private pendingLevelLoad: LevelConfig | null = null;
@@ -91,7 +92,11 @@ export class Game {
   }
 
   loadLevel(level: LevelConfig) {
-    // Clean up previous physics world
+    // Clean up previous collision handler and physics world
+    if (this.physicsWorld && this.collisionHandler) {
+      Matter.Events.off(this.physicsWorld.engine, 'collisionStart', this.collisionHandler);
+      this.collisionHandler = null;
+    }
     if (this.physicsWorld) {
       this.physicsWorld.clear();
     }
@@ -136,7 +141,7 @@ export class Game {
   private setupCollisionHandlers() {
     if (!this.physicsWorld) return;
 
-    Matter.Events.on(this.physicsWorld.engine, 'collisionStart', (event) => {
+    this.collisionHandler = (event: Matter.IEventCollision<Matter.Engine>) => {
       for (const pair of event.pairs) {
         const labels = [pair.bodyA.label, pair.bodyB.label];
         const bodies = [pair.bodyA, pair.bodyB];
@@ -177,7 +182,9 @@ export class Game {
           }
         }
       }
-    });
+    };
+
+    Matter.Events.on(this.physicsWorld.engine, 'collisionStart', this.collisionHandler);
   }
 
   private transitionToResult() {
