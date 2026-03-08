@@ -215,6 +215,17 @@ export class Game {
     Matter.Events.on(this.physicsWorld.engine, 'collisionStart', this.collisionHandler);
   }
 
+  private getComboColor(type: string): string {
+    switch (type) {
+      case 'nearMiss': return '#ff6b6b';
+      case 'windowThread': return '#4ecdc4';
+      case 'flip': return '#ffe66d';
+      case 'speedBurst': return '#a8e6cf';
+      case 'perfectLanding': return '#ffd700';
+      default: return '#ffffff';
+    }
+  }
+
   private transitionToResult() {
     if (this.phase === 'RESULT') return;
 
@@ -389,7 +400,10 @@ export class Game {
               const edgeDist = dist - Math.max(boundsWidth, boundsHeight);
               if (edgeDist > 0 && edgeDist < 15) {
                 this.effects.triggerSlowMotion(300);
-                this.comboTracker.registerNearMiss(String(body.id), feetPos);
+                const event = this.comboTracker.registerNearMiss(String(body.id), feetPos);
+                if (event) {
+                  this.effects.spawnFloatingText(event.position, `+${event.points} ${event.label}!`, this.getComboColor(event.type));
+                }
               }
             }
           }
@@ -397,12 +411,18 @@ export class Game {
           // Flip detection
           const headPos = this.ragdoll.getHeadPosition();
           const feetPos2 = this.ragdoll.getFeetPosition();
-          this.comboTracker.checkFlip(headPos, feetPos2);
+          const flipEvent = this.comboTracker.checkFlip(headPos, feetPos2);
+          if (flipEvent) {
+            this.effects.spawnFloatingText(flipEvent.position, `+${flipEvent.points} ${flipEvent.label}!`, this.getComboColor(flipEvent.type));
+          }
 
           // Speed burst detection
           const vel = this.bar.getVelocity();
           const speed2 = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
-          this.comboTracker.checkSpeedBurst(speed2, PHYSICS_TIMESTEP, feetPos2);
+          const speedEvent = this.comboTracker.checkSpeedBurst(speed2, PHYSICS_TIMESTEP, feetPos2);
+          if (speedEvent) {
+            this.effects.spawnFloatingText(speedEvent.position, `+${speedEvent.points} ${speedEvent.label}!`, this.getComboColor(speedEvent.type));
+          }
 
           // When bar finishes path, release the character
           if (this.bar.isFinished() && !this.barConstraintsRemoved) {
@@ -457,6 +477,9 @@ export class Game {
         this.renderLevel(ctx);
         if (this.currentLevel) {
           this.uiRenderer.renderLevelNumber(ctx, this.currentLevel.id);
+        }
+        if (this.comboTracker.isComboActive()) {
+          this.uiRenderer.renderComboMultiplier(ctx, this.comboTracker.getMultiplier());
         }
         break;
       case 'RESULT':

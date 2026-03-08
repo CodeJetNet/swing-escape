@@ -210,6 +210,23 @@ export class UIRenderer {
     return null;
   }
 
+  renderComboMultiplier(ctx: CanvasRenderingContext2D, multiplier: number) {
+    if (multiplier <= 1) return;
+
+    const x = WORLD_WIDTH - 60;
+    const y = 35;
+
+    ctx.fillStyle = 'rgba(233, 69, 96, 0.8)';
+    ctx.beginPath();
+    ctx.arc(x, y, 22, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = COLORS.text;
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`x${multiplier}`, x, y + 6);
+  }
+
   isBackButtonTapped(x: number, y: number): boolean {
     return x < 100 && y < 60;
   }
