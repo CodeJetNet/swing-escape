@@ -5,7 +5,6 @@ import { GamePhase, LevelConfig } from './types';
 
 export class Game {
   private phase: GamePhase = 'MENU';
-  private lastTime = 0;
   private accumulator = 0;
   private ctx: CanvasRenderingContext2D;
   private currentLevel: LevelConfig | null = null;
@@ -28,7 +27,7 @@ export class Game {
   }
 
   update(deltaMs: number) {
-    this.accumulator += deltaMs;
+    this.accumulator += Math.min(deltaMs, 200);
 
     while (this.accumulator >= PHYSICS_TIMESTEP) {
       this.fixedUpdate();
