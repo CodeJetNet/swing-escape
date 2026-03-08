@@ -2,6 +2,8 @@
 
 import { WORLD_WIDTH, WORLD_HEIGHT, COLORS } from './utils/constants';
 import { Game } from './game/Game';
+import { InputHandler } from './game/InputHandler';
+import { LevelConfig, Vector2 } from './game/types';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -25,7 +27,106 @@ function getScale() {
   return { scale, offsetX, offsetY };
 }
 
+function canvasToWorld(clientX: number, clientY: number): Vector2 {
+  const { scale, offsetX, offsetY } = getScale();
+  return {
+    x: (clientX - offsetX) / scale,
+    y: (clientY - offsetY) / scale,
+  };
+}
+
+const testLevel: LevelConfig = {
+  id: 1,
+  startPosition: { x: 100, y: 150 },
+  maxLineLength: 800,
+  parLineLength: 400,
+  obstacles: [],
+  landingPad: { position: { x: 650, y: 500 }, width: 100 },
+};
+
 const game = new Game(ctx);
+let inputHandler: InputHandler | null = null;
+
+// --- Pointer event handlers ---
+
+canvas.addEventListener('pointerdown', (e) => {
+  const phase = game.getPhase();
+
+  if (phase === 'MENU') {
+    // Tap to start: load test level and transition to DRAWING
+    game.loadLevel(testLevel);
+    inputHandler = new InputHandler(
+      testLevel.startPosition,
+      testLevel.maxLineLength,
+      canvasToWorld
+    );
+    inputHandler.setOnDrawingComplete((path) => {
+      console.log('Drawing complete, path points:', path.length);
+      game.setPhase('PLAYBACK');
+      // For now, go back to MENU after a timeout
+      setTimeout(() => {
+        game.setPhase('MENU');
+        inputHandler = null;
+      }, 2000);
+    });
+    return;
+  }
+
+  if (phase === 'DRAWING' && inputHandler) {
+    inputHandler.handlePointerDown(e.clientX, e.clientY);
+  }
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  if (game.getPhase() === 'DRAWING' && inputHandler) {
+    inputHandler.handlePointerMove(e.clientX, e.clientY);
+  }
+});
+
+canvas.addEventListener('pointerup', () => {
+  if (game.getPhase() === 'DRAWING' && inputHandler) {
+    inputHandler.handlePointerUp();
+  }
+});
+
+// --- Rendering helpers ---
+
+function renderPath(ctx: CanvasRenderingContext2D, path: Vector2[]) {
+  if (path.length < 2) return;
+  ctx.strokeStyle = COLORS.path;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(path[0].x, path[0].y);
+  for (let i = 1; i < path.length; i++) {
+    ctx.lineTo(path[i].x, path[i].y);
+  }
+  ctx.stroke();
+}
+
+function renderFuelGauge(ctx: CanvasRenderingContext2D, fraction: number) {
+  const gaugeWidth = 200;
+  const gaugeHeight = 12;
+  const x = (WORLD_WIDTH - gaugeWidth) / 2;
+  const y = 16;
+
+  // Background
+  ctx.fillStyle = COLORS.fuelGaugeBackground;
+  ctx.fillRect(x, y, gaugeWidth, gaugeHeight);
+
+  // Fill
+  ctx.fillStyle = COLORS.fuelGauge;
+  ctx.fillRect(x, y, gaugeWidth * fraction, gaugeHeight);
+
+  // Label
+  ctx.fillStyle = COLORS.textSecondary;
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('FUEL', WORLD_WIDTH / 2, y + gaugeHeight + 12);
+}
+
+// --- Game loop ---
 
 let lastTime = performance.now();
 
@@ -47,6 +148,16 @@ function loop(time: number) {
   ctx.scale(scale, scale);
 
   game.render();
+
+  // Draw path and fuel gauge during DRAWING phase
+  const phase = game.getPhase();
+  if ((phase === 'DRAWING' || phase === 'PLAYBACK') && inputHandler) {
+    const path = inputHandler.getPath();
+    renderPath(ctx, path);
+    if (phase === 'DRAWING') {
+      renderFuelGauge(ctx, inputHandler.getFuelFraction());
+    }
+  }
 
   ctx.restore();
   requestAnimationFrame(loop);
