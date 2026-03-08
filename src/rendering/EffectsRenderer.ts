@@ -8,9 +8,19 @@ interface Particle {
   color: string; size: number;
 }
 
+interface FloatingText {
+  x: number;
+  y: number;
+  text: string;
+  color: string;
+  life: number;
+  maxLife: number;
+}
+
 export class EffectsRenderer {
   private trail: Vector2[] = [];
   private particles: Particle[] = [];
+  private floatingTexts: FloatingText[] = [];
   private shakeIntensity = 0;
   private shakeOffsetX = 0;
   private shakeOffsetY = 0;
@@ -45,6 +55,17 @@ export class EffectsRenderer {
     if (stars >= 2) this.spawnParticles(position, 8, COLORS.star, 4);
   }
 
+  spawnFloatingText(position: Vector2, text: string, color: string) {
+    this.floatingTexts.push({
+      x: position.x,
+      y: position.y,
+      text,
+      color,
+      life: 0.8,
+      maxLife: 0.8,
+    });
+  }
+
   spawnCrashParticles(position: Vector2) {
     this.spawnParticles(position, 20, COLORS.particle, 4);
     this.triggerShake(8);
@@ -72,6 +93,13 @@ export class EffectsRenderer {
       p.life -= deltaMs / 1000;
     }
     this.particles = this.particles.filter(p => p.life > 0);
+
+    // Update floating texts
+    for (const ft of this.floatingTexts) {
+      ft.y -= deltaMs * 0.04; // Float upward
+      ft.life -= deltaMs / 1000;
+    }
+    this.floatingTexts = this.floatingTexts.filter(ft => ft.life > 0);
   }
 
   render(ctx: CanvasRenderingContext2D) {
@@ -98,12 +126,25 @@ export class EffectsRenderer {
       ctx.fill();
     }
     ctx.globalAlpha = 1;
+
+    // Floating texts
+    for (const ft of this.floatingTexts) {
+      const alpha = ft.life / ft.maxLife;
+      const scale = 0.8 + (1 - alpha) * 0.3;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = ft.color;
+      ctx.font = `bold ${Math.round(16 * scale)}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(ft.text, ft.x, ft.y);
+    }
+    ctx.globalAlpha = 1;
   }
 
   clearTrail() { this.trail = []; }
   clear() {
     this.trail = [];
     this.particles = [];
+    this.floatingTexts = [];
     this.shakeIntensity = 0;
     this.slowMotionTimer = 0;
   }
