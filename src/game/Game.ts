@@ -2,13 +2,15 @@
 
 import Matter from 'matter-js';
 import { PHYSICS_TIMESTEP, WORLD_WIDTH, WORLD_HEIGHT, COLORS } from '../utils/constants';
-import { GamePhase, LevelConfig, Vector2 } from './types';
+import { GamePhase, GameResult, LevelConfig, Vector2 } from './types';
 import { PhysicsWorld } from '../physics/PhysicsWorld';
 import { Ragdoll } from '../physics/Ragdoll';
 import { Bar } from '../physics/Bar';
 import { CharacterRenderer } from '../rendering/CharacterRenderer';
 import { LevelLoader, LoadedLevel } from '../levels/LevelLoader';
 import { ObstacleRenderer } from '../rendering/ObstacleRenderer';
+import { UIRenderer } from '../rendering/UIRenderer';
+import { pathLength, distance } from '../utils/math';
 
 export class Game {
   private phase: GamePhase = 'MENU';
@@ -21,9 +23,16 @@ export class Game {
   private bar: Bar | null = null;
   private characterRenderer: CharacterRenderer = new CharacterRenderer();
   private obstacleRenderer: ObstacleRenderer = new ObstacleRenderer();
+  private uiRenderer: UIRenderer = new UIRenderer();
   private loadedLevel: LoadedLevel | null = null;
   private drawnPath: Vector2[] = [];
   private barConstraintsRemoved = false;
+
+  private result: GameResult | null = null;
+  private resultStartTime: number = 0;
+  private gameTime: number = 0;
+  private fuelFraction: number = 1;
+  private landedOnPad = false;
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
@@ -41,6 +50,14 @@ export class Game {
     return this.currentLevel;
   }
 
+  getResult(): GameResult | null {
+    return this.result;
+  }
+
+  setFuelFraction(fraction: number) {
+    this.fuelFraction = fraction;
+  }
+
   loadLevel(level: LevelConfig) {
     // Clean up previous physics world
     if (this.physicsWorld) {
@@ -48,6 +65,10 @@ export class Game {
     }
 
     this.currentLevel = level;
+    this.result = null;
+    this.landedOnPad = false;
+    this.gameTime = 0;
+    this.fuelFraction = 1;
 
     // Create physics world
     this.physicsWorld = new PhysicsWorld();
@@ -96,23 +117,68 @@ export class Game {
           // Hit obstacle - death
           if (this.phase === 'PLAYBACK') {
             this.ragdoll?.goLoose();
-            this.phase = 'RESULT';
+            this.landedOnPad = false;
+            this.transitionToResult();
           }
         }
         if (labels.includes('lava')) {
           if (this.phase === 'PLAYBACK') {
             this.ragdoll?.goLoose();
-            this.phase = 'RESULT';
+            this.landedOnPad = false;
+            this.transitionToResult();
           }
         }
         if (labels.includes('landingPad')) {
           if (this.phase === 'PLAYBACK' && this.barConstraintsRemoved) {
             // Landed!
-            this.phase = 'RESULT';
+            this.landedOnPad = true;
+            this.transitionToResult();
           }
         }
       }
     });
+  }
+
+  private transitionToResult() {
+    if (this.phase === 'RESULT') return; // Already in result
+
+    const won = this.landedOnPad;
+    let stars = 0;
+    let landingAccuracy = 0;
+    const lineLen = pathLength(this.drawnPath);
+
+    if (won && this.currentLevel) {
+      // Calculate landing accuracy (distance from center of landing pad)
+      const padCenter = this.currentLevel.landingPad.position;
+      const padWidth = this.currentLevel.landingPad.width;
+      const feetPos = this.ragdoll?.getFeetPosition() || padCenter;
+      const dist = distance(feetPos, padCenter);
+      landingAccuracy = Math.max(0, 1 - dist / (padWidth / 2));
+
+      // Calculate star rating based on line length vs par
+      const par = this.currentLevel.parLineLength;
+      if (lineLen <= par) {
+        stars = 3;
+      } else if (lineLen <= par * 1.5) {
+        stars = 2;
+      } else {
+        stars = 1;
+      }
+
+      // Landing accuracy can bump stars down if very off-center
+      if (landingAccuracy < 0.2 && stars > 1) {
+        stars--;
+      }
+    }
+
+    this.result = {
+      won,
+      stars,
+      lineLength: lineLen,
+      landingAccuracy,
+    };
+    this.resultStartTime = this.gameTime;
+    this.phase = 'RESULT';
   }
 
   startPlayback(path: Vector2[]) {
@@ -124,6 +190,8 @@ export class Game {
   }
 
   update(deltaMs: number) {
+    this.gameTime += deltaMs;
+
     // Update obstacle renderer for lava animation
     this.obstacleRenderer.update(deltaMs);
 
@@ -167,7 +235,8 @@ export class Game {
             const headPos = this.ragdoll.getHeadPosition();
             const lowestY = Math.max(feetPos.y, headPos.y);
             if (lowestY > WORLD_HEIGHT + 100) {
-              this.phase = 'RESULT';
+              this.landedOnPad = false;
+              this.transitionToResult();
             }
           }
         }
@@ -190,13 +259,21 @@ export class Game {
         break;
       case 'DRAWING':
         this.renderLevel(ctx);
+        if (this.currentLevel) {
+          this.uiRenderer.renderLevelNumber(ctx, this.currentLevel.id);
+        }
+        this.uiRenderer.renderFuelGauge(ctx, this.fuelFraction);
+        this.uiRenderer.renderReady(ctx, this.gameTime);
         break;
       case 'PLAYBACK':
         this.renderLevel(ctx);
+        if (this.currentLevel) {
+          this.uiRenderer.renderLevelNumber(ctx, this.currentLevel.id);
+        }
         break;
       case 'RESULT':
         this.renderLevel(ctx);
-        this.renderResult(ctx);
+        this.renderResultOverlay(ctx);
         break;
     }
   }
@@ -243,10 +320,10 @@ export class Game {
     }
   }
 
-  private renderResult(ctx: CanvasRenderingContext2D) {
-    ctx.fillStyle = COLORS.textSecondary;
-    ctx.font = '24px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('Tap to retry', WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+  private renderResultOverlay(ctx: CanvasRenderingContext2D) {
+    if (!this.result) return;
+    const elapsed = this.gameTime - this.resultStartTime;
+    const animProgress = Math.min(elapsed / 1000, 1);
+    this.uiRenderer.renderResult(ctx, this.result, animProgress);
   }
 }
