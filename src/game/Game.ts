@@ -37,6 +37,11 @@ export class Game {
   }
 
   loadLevel(level: LevelConfig) {
+    // Clean up previous physics world
+    if (this.physicsWorld) {
+      this.physicsWorld.clear();
+    }
+
     this.currentLevel = level;
 
     // Create physics world
