@@ -62,18 +62,19 @@ canvas.addEventListener('pointerdown', (e) => {
     );
     inputHandler.setOnDrawingComplete((path) => {
       console.log('Drawing complete, path points:', path.length);
-      game.setPhase('PLAYBACK');
-      // For now, go back to MENU after a timeout
-      setTimeout(() => {
-        game.setPhase('MENU');
-        inputHandler = null;
-      }, 2000);
+      game.startPlayback(path);
     });
     return;
   }
 
   if (phase === 'DRAWING' && inputHandler) {
     inputHandler.handlePointerDown(e.clientX, e.clientY);
+  }
+
+  if (phase === 'RESULT') {
+    // Tap to retry: go back to menu
+    game.setPhase('MENU');
+    inputHandler = null;
   }
 });
 
