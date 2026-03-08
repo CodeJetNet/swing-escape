@@ -49,6 +49,7 @@ export class Game {
   private landedOnPad = false;
   private gameStateRef: GameState | null = null;
 
+  private deathZoom = { active: false, progress: 0, targetX: 0, targetY: 0, phase: 'idle' as 'idle' | 'zoomIn' | 'hold' | 'zoomOut' };
   private collisionHandler: ((event: Matter.IEventCollision<Matter.Engine>) => void) | null = null;
   private transitionAlpha: number = 0;
   private transitionState: 'none' | 'fadeOut' | 'fadeIn' = 'none';
@@ -89,6 +90,24 @@ export class Game {
   getGhostPath(): Vector2[] {
     return this.ghostPath;
   }
+
+  getDeathZoom(): { active: boolean; scale: number; targetX: number; targetY: number } {
+    if (!this.deathZoom.active) return { active: false, scale: 1, targetX: 0, targetY: 0 };
+
+    let scale = 1;
+    if (this.deathZoom.phase === 'zoomIn') {
+      scale = 1 + 0.5 * this.easeOutCubic(this.deathZoom.progress);
+    } else if (this.deathZoom.phase === 'hold') {
+      scale = 1.5;
+    } else if (this.deathZoom.phase === 'zoomOut') {
+      scale = 1.5 - 0.5 * this.easeInCubic(this.deathZoom.progress);
+    }
+
+    return { active: true, scale, targetX: this.deathZoom.targetX, targetY: this.deathZoom.targetY };
+  }
+
+  private easeOutCubic(t: number): number { return 1 - Math.pow(1 - t, 3); }
+  private easeInCubic(t: number): number { return t * t * t; }
 
   getEffects(): EffectsRenderer {
     return this.effects;
@@ -152,6 +171,7 @@ export class Game {
     this.drawnPath = [];
     this.effects.clear();
     this.comboTracker.reset();
+    this.deathZoom = { active: false, progress: 0, targetX: 0, targetY: 0, phase: 'idle' };
     this.phase = 'DRAWING';
   }
 
@@ -177,6 +197,8 @@ export class Game {
             vibrate(200);
             this.ragdoll?.goLoose();
             this.landedOnPad = false;
+            const impactPoint = this.ragdoll?.getFeetPosition() || { x: 0, y: 0 };
+            this.deathZoom = { active: true, progress: 0, targetX: impactPoint.x, targetY: impactPoint.y, phase: 'zoomIn' };
             this.transitionToResult();
           }
         }
@@ -188,6 +210,8 @@ export class Game {
             vibrate(200);
             this.ragdoll?.goLoose();
             this.landedOnPad = false;
+            const impactPoint = this.ragdoll?.getFeetPosition() || { x: 0, y: 0 };
+            this.deathZoom = { active: true, progress: 0, targetX: impactPoint.x, targetY: impactPoint.y, phase: 'zoomIn' };
             this.transitionToResult();
           }
         }
@@ -206,6 +230,8 @@ export class Game {
             this.audio.playThud();
             vibrate(200);
             this.ragdoll?.goLoose();
+            const impactPoint = this.ragdoll?.getFeetPosition() || { x: 0, y: 0 };
+            this.deathZoom = { active: true, progress: 0, targetX: impactPoint.x, targetY: impactPoint.y, phase: 'zoomIn' };
             this.transitionToResult();
           }
         }
@@ -450,6 +476,19 @@ export class Game {
         // Keep stepping physics for ragdoll to settle
         if (this.physicsWorld) {
           this.physicsWorld.step(PHYSICS_TIMESTEP);
+        }
+        // Update death camera zoom
+        if (this.deathZoom.active) {
+          this.deathZoom.progress += PHYSICS_TIMESTEP / (this.deathZoom.phase === 'hold' ? 400 : 300);
+          if (this.deathZoom.progress >= 1) {
+            this.deathZoom.progress = 0;
+            if (this.deathZoom.phase === 'zoomIn') this.deathZoom.phase = 'hold';
+            else if (this.deathZoom.phase === 'hold') this.deathZoom.phase = 'zoomOut';
+            else if (this.deathZoom.phase === 'zoomOut') {
+              this.deathZoom.active = false;
+              this.deathZoom.phase = 'idle';
+            }
+          }
         }
         break;
     }

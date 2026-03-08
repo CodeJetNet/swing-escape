@@ -231,6 +231,14 @@ function loop(time: number) {
   ctx.translate(offsetX + shake.x, offsetY + shake.y);
   ctx.scale(scale, scale);
 
+  const deathZoom = game.getDeathZoom();
+  if (deathZoom.active) {
+    const zs = deathZoom.scale;
+    ctx.translate(deathZoom.targetX, deathZoom.targetY);
+    ctx.scale(zs, zs);
+    ctx.translate(-deathZoom.targetX, -deathZoom.targetY);
+  }
+
   game.render();
 
   // Draw ghost path and active path during DRAWING and PLAYBACK phases
