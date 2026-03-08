@@ -135,7 +135,10 @@ canvas.addEventListener('pointerdown', (e) => {
     const uiRenderer = game.getUIRenderer();
     const button = uiRenderer.getResultButtonTapped(worldPos.x, worldPos.y, result);
 
-    if (!button) return; // Tap outside buttons — ignore
+    if (!button) {
+      game.skipResultAnimation();
+      return;
+    }
 
     const levelId = currentLevelIndex + 1;
 

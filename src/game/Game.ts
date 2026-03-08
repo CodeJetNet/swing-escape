@@ -50,6 +50,7 @@ export class Game {
   private landedOnPad = false;
   private gameStateRef: GameState | null = null;
 
+  private windowGaps: { x: number; yTop: number; yBottom: number; passed: boolean }[] = [];
   private deathZoom = { active: false, progress: 0, targetX: 0, targetY: 0, phase: 'idle' as 'idle' | 'zoomIn' | 'hold' | 'zoomOut' };
   private collisionHandler: ((event: Matter.IEventCollision<Matter.Engine>) => void) | null = null;
   private transitionAlpha: number = 0;
@@ -167,6 +168,20 @@ export class Game {
 
     // Set up collision detection
     this.setupCollisionHandlers();
+
+    this.windowGaps = [];
+    for (const obs of level.obstacles) {
+      if (obs.type === 'window' && obs.gapHeight) {
+        const gapCenterY = obs.position.y;
+        const halfGap = obs.gapHeight / 2;
+        this.windowGaps.push({
+          x: obs.position.x,
+          yTop: gapCenterY - halfGap,
+          yBottom: gapCenterY + halfGap,
+          passed: false,
+        });
+      }
+    }
 
     this.barConstraintsRemoved = false;
     this.drawnPath = [];
@@ -328,6 +343,12 @@ export class Game {
     this.phase = 'RESULT';
   }
 
+  skipResultAnimation() {
+    if (this.phase === 'RESULT' && this.result?.won) {
+      this.resultStartTime = this.gameTime - 3000;
+    }
+  }
+
   startPlayback(path: Vector2[]) {
     if (!this.bar) return;
     this.drawnPath = path;
@@ -451,6 +472,21 @@ export class Game {
           const speedEvent = this.comboTracker.checkSpeedBurst(speed2, PHYSICS_TIMESTEP, feetPos2);
           if (speedEvent) {
             this.effects.spawnFloatingText(speedEvent.position, `+${speedEvent.points} ${speedEvent.label}!`, this.getComboColor(speedEvent.type));
+          }
+
+          // Window thread detection
+          for (const gap of this.windowGaps) {
+            if (gap.passed) continue;
+            const feetX = feetPos2.x;
+            if (Math.abs(feetX - gap.x) < 10) {
+              if (feetPos2.y > gap.yTop && feetPos2.y < gap.yBottom) {
+                gap.passed = true;
+                const event = this.comboTracker.registerWindowThread({ x: gap.x, y: (gap.yTop + gap.yBottom) / 2 });
+                if (event) {
+                  this.effects.spawnFloatingText(event.position, `+${event.points} ${event.label}!`, this.getComboColor(event.type));
+                }
+              }
+            }
           }
 
           // When bar finishes path, release the character
