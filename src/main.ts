@@ -42,6 +42,11 @@ let currentLevelIndex = gameState.getCurrentLevel() - 1;
 
 const game = new Game(ctx);
 let inputHandler: InputHandler | null = null;
+let audioInitialized = false;
+
+function vibrate(pattern: number | number[]) {
+  if (navigator.vibrate) navigator.vibrate(pattern);
+}
 
 function loadCurrentLevel() {
   // Clamp to available levels
@@ -63,6 +68,12 @@ function loadCurrentLevel() {
 // --- Pointer event handlers ---
 
 canvas.addEventListener('pointerdown', (e) => {
+  // Initialize audio on first user gesture
+  if (!audioInitialized) {
+    game.initAudio();
+    audioInitialized = true;
+  }
+
   const phase = game.getPhase();
 
   if (phase === 'MENU') {
@@ -99,7 +110,12 @@ canvas.addEventListener('pointerdown', (e) => {
 
 canvas.addEventListener('pointermove', (e) => {
   if (game.getPhase() === 'DRAWING' && inputHandler) {
+    const pathBefore = inputHandler.getPath().length;
     inputHandler.handlePointerMove(e.clientX, e.clientY);
+    // Haptic feedback when new path points are added
+    if (inputHandler.getPath().length > pathBefore) {
+      vibrate(10);
+    }
   }
 });
 

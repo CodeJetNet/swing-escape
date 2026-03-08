@@ -12,6 +12,11 @@ import { ObstacleRenderer } from '../rendering/ObstacleRenderer';
 import { UIRenderer } from '../rendering/UIRenderer';
 import { EffectsRenderer } from '../rendering/EffectsRenderer';
 import { pathLength, distance } from '../utils/math';
+import { AudioManager } from '../audio/AudioManager';
+
+function vibrate(pattern: number | number[]) {
+  if (navigator.vibrate) navigator.vibrate(pattern);
+}
 
 export class Game {
   private phase: GamePhase = 'MENU';
@@ -29,6 +34,8 @@ export class Game {
   private loadedLevel: LoadedLevel | null = null;
   private drawnPath: Vector2[] = [];
   private barConstraintsRemoved = false;
+  private audio: AudioManager = new AudioManager();
+  private playbackFrameCount = 0;
 
   private result: GameResult | null = null;
   private resultStartTime: number = 0;
@@ -38,6 +45,10 @@ export class Game {
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
+  }
+
+  initAudio() {
+    this.audio.init();
   }
 
   setPhase(phase: GamePhase) {
@@ -125,6 +136,8 @@ export class Game {
           if (this.phase === 'PLAYBACK') {
             const collisionPoint = this.ragdoll?.getFeetPosition() || { x: 0, y: 0 };
             this.effects.spawnCrashParticles(collisionPoint);
+            this.audio.playThud();
+            vibrate(200);
             this.ragdoll?.goLoose();
             this.landedOnPad = false;
             this.transitionToResult();
@@ -134,6 +147,8 @@ export class Game {
           if (this.phase === 'PLAYBACK') {
             const collisionPoint = this.ragdoll?.getFeetPosition() || { x: 0, y: 0 };
             this.effects.spawnCrashParticles(collisionPoint);
+            this.audio.playSplat();
+            vibrate(200);
             this.ragdoll?.goLoose();
             this.landedOnPad = false;
             this.transitionToResult();
@@ -193,6 +208,8 @@ export class Game {
       const landingPos = this.ragdoll.getFeetPosition();
       this.effects.spawnLandingBurst(landingPos, stars);
       this.effects.triggerShake(2);
+      this.audio.playLandingChime(stars);
+      vibrate([50, 30, 50, 30, 100]);
     }
 
     this.resultStartTime = this.gameTime;
@@ -204,6 +221,7 @@ export class Game {
     this.drawnPath = path;
     this.bar.setPath(path);
     this.barConstraintsRemoved = false;
+    this.playbackFrameCount = 0;
     this.phase = 'PLAYBACK';
   }
 
@@ -240,6 +258,16 @@ export class Game {
           this.bar.update();
           this.ragdoll.applyCartoonPhysics(this.bar.getVelocity());
           this.physicsWorld.step(PHYSICS_TIMESTEP * timeScale);
+
+          // Play whoosh sound periodically based on bar velocity
+          this.playbackFrameCount++;
+          if (this.playbackFrameCount % 5 === 0) {
+            const vel = this.bar.getVelocity();
+            const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+            if (speed > 1) {
+              this.audio.playWhoosh(speed);
+            }
+          }
 
           // Add trail point at ragdoll feet
           this.effects.addTrailPoint(this.ragdoll.getFeetPosition());
