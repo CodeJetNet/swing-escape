@@ -180,6 +180,26 @@ export class Ragdoll {
     return { ...this.parts.head.position };
   }
 
+  doVictoryPose() {
+    // Arms up in V shape
+    const armForce = 0.008;
+    Matter.Body.applyForce(this.parts.upperArmL, this.parts.upperArmL.position, { x: -armForce * 0.5, y: -armForce });
+    Matter.Body.applyForce(this.parts.upperArmR, this.parts.upperArmR.position, { x: armForce * 0.5, y: -armForce });
+    Matter.Body.applyForce(this.parts.lowerArmL, this.parts.lowerArmL.position, { x: -armForce * 0.3, y: -armForce * 0.8 });
+    Matter.Body.applyForce(this.parts.lowerArmR, this.parts.lowerArmR.position, { x: armForce * 0.3, y: -armForce * 0.8 });
+
+    // Small hop
+    const hopForce = 0.003;
+    for (const body of this.getAllBodies()) {
+      Matter.Body.applyForce(body, body.position, { x: 0, y: -hopForce });
+    }
+
+    // Temporarily stiffen joints so pose holds
+    for (const c of this.constraints) {
+      c.stiffness = 1.0;
+    }
+  }
+
   /** Check if character is roughly upright (for landing) */
   isUpright(): boolean {
     const head = this.parts.head.position;

@@ -319,6 +319,7 @@ export class Game {
       this.effects.triggerShake(2);
       this.audio.playLandingChime(stars);
       vibrate([50, 30, 50, 30, 100]);
+      this.ragdoll.doVictoryPose();
     }
 
     this.resultStartTime = this.gameTime;
