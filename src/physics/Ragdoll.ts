@@ -131,17 +131,39 @@ export class Ragdoll {
   applyCartoonPhysics(barVelocity: Vector2) {
     if (this.isReleased) return;
 
-    // Exaggerated momentum on direction changes
+    const speed = Math.sqrt(barVelocity.x ** 2 + barVelocity.y ** 2);
+    if (speed < 0.01) return;
+
     const bodies = this.getAllBodies();
     for (const body of bodies) {
-      // Apply extra force in direction of movement for whip effect
-      // Stagger: lower body parts get more delayed force
-      const isLower = body.label.includes('Leg') || body.label.includes('lower');
-      const factor = isLower ? MOMENTUM_MULTIPLIER * 0.7 : MOMENTUM_MULTIPLIER * 0.3;
-      Matter.Body.applyForce(body, body.position, {
-        x: barVelocity.x * factor * 0.0001,
-        y: barVelocity.y * factor * 0.0001,
-      });
+      const label = body.label;
+      const isLeg = label.includes('Leg');
+      const isLowerArm = label === 'lowerArmL' || label === 'lowerArmR';
+      const isTorso = label === 'torso';
+      const isHead = label === 'head';
+
+      let forceX: number;
+      let forceY: number;
+
+      if (isLeg) {
+        // Legs: apply force OPPOSITE to movement to exaggerate trailing
+        const factor = MOMENTUM_MULTIPLIER * 0.6;
+        forceX = -barVelocity.x * factor * 0.0001;
+        forceY = -barVelocity.y * factor * 0.00005;
+      } else if (isTorso || isHead) {
+        // Torso/head: mild opposing force to trail behind arms
+        const factor = MOMENTUM_MULTIPLIER * 0.2;
+        forceX = -barVelocity.x * factor * 0.0001;
+        forceY = 0;
+      } else {
+        // Arms: no extra force — they're pulled naturally by bar constraints
+        forceX = 0;
+        forceY = 0;
+      }
+
+      if (forceX !== 0 || forceY !== 0) {
+        Matter.Body.applyForce(body, body.position, { x: forceX, y: forceY });
+      }
     }
   }
 
