@@ -10,6 +10,7 @@ import { CharacterRenderer } from '../rendering/CharacterRenderer';
 import { LevelLoader, LoadedLevel } from '../levels/LevelLoader';
 import { ObstacleRenderer } from '../rendering/ObstacleRenderer';
 import { UIRenderer } from '../rendering/UIRenderer';
+import { EffectsRenderer } from '../rendering/EffectsRenderer';
 import { pathLength, distance } from '../utils/math';
 
 export class Game {
@@ -24,6 +25,7 @@ export class Game {
   private characterRenderer: CharacterRenderer = new CharacterRenderer();
   private obstacleRenderer: ObstacleRenderer = new ObstacleRenderer();
   private uiRenderer: UIRenderer = new UIRenderer();
+  private effects: EffectsRenderer = new EffectsRenderer();
   private loadedLevel: LoadedLevel | null = null;
   private drawnPath: Vector2[] = [];
   private barConstraintsRemoved = false;
@@ -56,6 +58,10 @@ export class Game {
 
   setFuelFraction(fraction: number) {
     this.fuelFraction = fraction;
+  }
+
+  getEffects(): EffectsRenderer {
+    return this.effects;
   }
 
   loadLevel(level: LevelConfig) {
@@ -97,6 +103,7 @@ export class Game {
 
     this.barConstraintsRemoved = false;
     this.drawnPath = [];
+    this.effects.clear();
     this.phase = 'DRAWING';
   }
 
@@ -116,6 +123,8 @@ export class Game {
         if (labels.includes('wall') || labels.includes('ceiling')) {
           // Hit obstacle - death
           if (this.phase === 'PLAYBACK') {
+            const collisionPoint = this.ragdoll?.getFeetPosition() || { x: 0, y: 0 };
+            this.effects.spawnCrashParticles(collisionPoint);
             this.ragdoll?.goLoose();
             this.landedOnPad = false;
             this.transitionToResult();
@@ -123,6 +132,8 @@ export class Game {
         }
         if (labels.includes('lava')) {
           if (this.phase === 'PLAYBACK') {
+            const collisionPoint = this.ragdoll?.getFeetPosition() || { x: 0, y: 0 };
+            this.effects.spawnCrashParticles(collisionPoint);
             this.ragdoll?.goLoose();
             this.landedOnPad = false;
             this.transitionToResult();
@@ -177,6 +188,13 @@ export class Game {
       lineLength: lineLen,
       landingAccuracy,
     };
+
+    if (won && this.ragdoll) {
+      const landingPos = this.ragdoll.getFeetPosition();
+      this.effects.spawnLandingBurst(landingPos, stars);
+      this.effects.triggerShake(2);
+    }
+
     this.resultStartTime = this.gameTime;
     this.phase = 'RESULT';
   }
@@ -194,6 +212,9 @@ export class Game {
 
     // Update obstacle renderer for lava animation
     this.obstacleRenderer.update(deltaMs);
+
+    // Update effects (shake, particles, slow motion)
+    this.effects.update(deltaMs);
 
     this.accumulator += Math.min(deltaMs, 200);
 
@@ -215,9 +236,31 @@ export class Game {
         break;
       case 'PLAYBACK':
         if (this.bar && this.ragdoll && this.physicsWorld) {
+          const timeScale = this.effects.getTimeScale();
           this.bar.update();
           this.ragdoll.applyCartoonPhysics(this.bar.getVelocity());
-          this.physicsWorld.step(PHYSICS_TIMESTEP);
+          this.physicsWorld.step(PHYSICS_TIMESTEP * timeScale);
+
+          // Add trail point at ragdoll feet
+          this.effects.addTrailPoint(this.ragdoll.getFeetPosition());
+
+          // Near-miss detection: check proximity to obstacle bodies
+          if (this.loadedLevel) {
+            const feetPos = this.ragdoll.getFeetPosition();
+            for (const obs of this.loadedLevel.obstacles) {
+              const body = obs.body;
+              const dx = feetPos.x - body.position.x;
+              const dy = feetPos.y - body.position.y;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              // Use bounds to estimate if we're close but not colliding
+              const boundsWidth = (body.bounds.max.x - body.bounds.min.x) / 2;
+              const boundsHeight = (body.bounds.max.y - body.bounds.min.y) / 2;
+              const edgeDist = dist - Math.max(boundsWidth, boundsHeight);
+              if (edgeDist > 0 && edgeDist < 15) {
+                this.effects.triggerSlowMotion(300);
+              }
+            }
+          }
 
           // When bar finishes path, release the character
           if (this.bar.isFinished() && !this.barConstraintsRemoved) {
@@ -301,6 +344,9 @@ export class Game {
 
     // Draw landing pad
     this.obstacleRenderer.renderLandingPad(ctx, this.currentLevel.landingPad);
+
+    // Draw effects (trail, particles)
+    this.effects.render(ctx);
 
     // Draw bar
     if (this.bar) {

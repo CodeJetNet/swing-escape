@@ -148,7 +148,8 @@ function loop(time: number) {
   ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
   ctx.save();
-  ctx.translate(offsetX, offsetY);
+  const shake = game.getEffects().getShakeOffset();
+  ctx.translate(offsetX + shake.x, offsetY + shake.y);
   ctx.scale(scale, scale);
 
   game.render();
