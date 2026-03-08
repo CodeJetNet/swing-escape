@@ -3,6 +3,7 @@ const STORAGE_KEY = 'swing-escape-state';
 interface SavedState {
   currentLevel: number;
   starRatings: Record<number, number>;
+  bestScores: Record<number, number>;
   endlessModeHighScore: number;
 }
 
@@ -18,7 +19,7 @@ export class GameState {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) return JSON.parse(raw);
     } catch {}
-    return { currentLevel: 1, starRatings: {}, endlessModeHighScore: 0 };
+    return { currentLevel: 1, starRatings: {}, bestScores: {}, endlessModeHighScore: 0 };
   }
 
   private save() {
@@ -53,8 +54,20 @@ export class GameState {
     }
   }
 
+  getBestScore(levelId: number): number {
+    return this.state.bestScores[levelId] || 0;
+  }
+
+  setBestScore(levelId: number, score: number) {
+    const prev = this.state.bestScores[levelId] || 0;
+    if (score > prev) {
+      this.state.bestScores[levelId] = score;
+      this.save();
+    }
+  }
+
   reset() {
-    this.state = { currentLevel: 1, starRatings: {}, endlessModeHighScore: 0 };
+    this.state = { currentLevel: 1, starRatings: {}, bestScores: {}, endlessModeHighScore: 0 };
     this.save();
   }
 }

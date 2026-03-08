@@ -15,6 +15,7 @@ import { pathLength, distance } from '../utils/math';
 import { AudioManager } from '../audio/AudioManager';
 import { GameState } from '../state/GameState';
 import { levels as allLevels } from '../levels/levels';
+import { ComboTracker } from './ComboTracker';
 
 function vibrate(pattern: number | number[]) {
   if (navigator.vibrate) navigator.vibrate(pattern);
@@ -38,6 +39,7 @@ export class Game {
   private ghostPath: Vector2[] = [];
   private barConstraintsRemoved = false;
   private audio: AudioManager = new AudioManager();
+  private comboTracker: ComboTracker = new ComboTracker();
   private playbackFrameCount = 0;
 
   private result: GameResult | null = null;
@@ -149,6 +151,7 @@ export class Game {
     this.barConstraintsRemoved = false;
     this.drawnPath = [];
     this.effects.clear();
+    this.comboTracker.reset();
     this.phase = 'DRAWING';
   }
 
@@ -213,7 +216,7 @@ export class Game {
   }
 
   private transitionToResult() {
-    if (this.phase === 'RESULT') return; // Already in result
+    if (this.phase === 'RESULT') return;
 
     const won = this.landedOnPad;
     let stars = 0;
@@ -221,14 +224,17 @@ export class Game {
     const lineLen = pathLength(this.drawnPath);
 
     if (won && this.currentLevel) {
-      // Calculate landing accuracy (distance from center of landing pad)
       const padCenter = this.currentLevel.landingPad.position;
       const padWidth = this.currentLevel.landingPad.width;
       const feetPos = this.ragdoll?.getFeetPosition() || padCenter;
       const dist = distance(feetPos, padCenter);
       landingAccuracy = Math.max(0, 1 - dist / (padWidth / 2));
 
-      // Calculate star rating based on line length vs par
+      // Perfect landing combo
+      if (landingAccuracy > 0.75) {
+        this.comboTracker.registerPerfectLanding(feetPos);
+      }
+
       const par = this.currentLevel.parLineLength;
       if (lineLen <= par) {
         stars = 3;
@@ -238,10 +244,24 @@ export class Game {
         stars = 1;
       }
 
-      // Landing accuracy can bump stars down if very off-center
       if (landingAccuracy < 0.2 && stars > 1) {
         stars--;
       }
+    }
+
+    const comboScore = this.comboTracker.getTotalScore();
+    const comboEvents = this.comboTracker.getEvents();
+    const landingBonus = won ? (landingAccuracy > 0.75 ? 50 : 30) : 0;
+    const efficiencyBonus = won && this.currentLevel
+      ? Math.max(0, Math.round(30 * (1 - (lineLen - this.currentLevel.parLineLength) / this.currentLevel.parLineLength)))
+      : 0;
+    const totalScore = comboScore + landingBonus + efficiencyBonus;
+
+    const levelId = this.currentLevel?.id || 0;
+    const prevBest = this.gameStateRef?.getBestScore(levelId) || 0;
+    const isNewBest = won && totalScore > prevBest;
+    if (isNewBest && this.gameStateRef) {
+      this.gameStateRef.setBestScore(levelId, totalScore);
     }
 
     this.result = {
@@ -249,6 +269,11 @@ export class Game {
       stars,
       lineLength: lineLen,
       landingAccuracy,
+      comboScore,
+      comboEvents,
+      totalScore,
+      bestScore: isNewBest ? totalScore : prevBest,
+      isNewBest,
     };
 
     if (won && this.ragdoll) {
@@ -348,7 +373,10 @@ export class Game {
           // Add trail point at ragdoll feet
           this.effects.addTrailPoint(this.ragdoll.getFeetPosition());
 
-          // Near-miss detection: check proximity to obstacle bodies
+          // Combo tracking
+          this.comboTracker.update(PHYSICS_TIMESTEP);
+
+          // Near-miss detection with combo tracking
           if (this.loadedLevel) {
             const feetPos = this.ragdoll.getFeetPosition();
             for (const obs of this.loadedLevel.obstacles) {
@@ -356,15 +384,25 @@ export class Game {
               const dx = feetPos.x - body.position.x;
               const dy = feetPos.y - body.position.y;
               const dist = Math.sqrt(dx * dx + dy * dy);
-              // Use bounds to estimate if we're close but not colliding
               const boundsWidth = (body.bounds.max.x - body.bounds.min.x) / 2;
               const boundsHeight = (body.bounds.max.y - body.bounds.min.y) / 2;
               const edgeDist = dist - Math.max(boundsWidth, boundsHeight);
               if (edgeDist > 0 && edgeDist < 15) {
                 this.effects.triggerSlowMotion(300);
+                this.comboTracker.registerNearMiss(String(body.id), feetPos);
               }
             }
           }
+
+          // Flip detection
+          const headPos = this.ragdoll.getHeadPosition();
+          const feetPos2 = this.ragdoll.getFeetPosition();
+          this.comboTracker.checkFlip(headPos, feetPos2);
+
+          // Speed burst detection
+          const vel = this.bar.getVelocity();
+          const speed2 = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+          this.comboTracker.checkSpeedBurst(speed2, PHYSICS_TIMESTEP, feetPos2);
 
           // When bar finishes path, release the character
           if (this.bar.isFinished() && !this.barConstraintsRemoved) {
