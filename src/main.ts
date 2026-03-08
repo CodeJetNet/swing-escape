@@ -3,7 +3,8 @@
 import { WORLD_WIDTH, WORLD_HEIGHT, COLORS } from './utils/constants';
 import { Game } from './game/Game';
 import { InputHandler } from './game/InputHandler';
-import { LevelConfig, Vector2 } from './game/types';
+import { Vector2 } from './game/types';
+import { levels } from './levels/levels';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -35,14 +36,7 @@ function canvasToWorld(clientX: number, clientY: number): Vector2 {
   };
 }
 
-const testLevel: LevelConfig = {
-  id: 1,
-  startPosition: { x: 100, y: 150 },
-  maxLineLength: 800,
-  parLineLength: 400,
-  obstacles: [],
-  landingPad: { position: { x: 650, y: 500 }, width: 100 },
-};
+let currentLevelIndex = 0;
 
 const game = new Game(ctx);
 let inputHandler: InputHandler | null = null;
@@ -53,11 +47,12 @@ canvas.addEventListener('pointerdown', (e) => {
   const phase = game.getPhase();
 
   if (phase === 'MENU') {
-    // Tap to start: load test level and transition to DRAWING
-    game.loadLevel(testLevel);
+    // Tap to start: load current level and transition to DRAWING
+    const level = levels[currentLevelIndex];
+    game.loadLevel(level);
     inputHandler = new InputHandler(
-      testLevel.startPosition,
-      testLevel.maxLineLength,
+      level.startPosition,
+      level.maxLineLength,
       canvasToWorld
     );
     inputHandler.setOnDrawingComplete((path) => {

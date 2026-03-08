@@ -1,11 +1,14 @@
 // src/game/Game.ts
 
+import Matter from 'matter-js';
 import { PHYSICS_TIMESTEP, WORLD_WIDTH, WORLD_HEIGHT, COLORS } from '../utils/constants';
 import { GamePhase, LevelConfig, Vector2 } from './types';
 import { PhysicsWorld } from '../physics/PhysicsWorld';
 import { Ragdoll } from '../physics/Ragdoll';
 import { Bar } from '../physics/Bar';
 import { CharacterRenderer } from '../rendering/CharacterRenderer';
+import { LevelLoader, LoadedLevel } from '../levels/LevelLoader';
+import { ObstacleRenderer } from '../rendering/ObstacleRenderer';
 
 export class Game {
   private phase: GamePhase = 'MENU';
@@ -17,6 +20,8 @@ export class Game {
   private ragdoll: Ragdoll | null = null;
   private bar: Bar | null = null;
   private characterRenderer: CharacterRenderer = new CharacterRenderer();
+  private obstacleRenderer: ObstacleRenderer = new ObstacleRenderer();
+  private loadedLevel: LoadedLevel | null = null;
   private drawnPath: Vector2[] = [];
   private barConstraintsRemoved = false;
 
@@ -63,9 +68,51 @@ export class Game {
       this.physicsWorld.addConstraint(constraint);
     }
 
+    // Load level obstacles and landing pad
+    this.loadedLevel = LevelLoader.load(level, this.physicsWorld);
+
+    // Set up collision detection
+    this.setupCollisionHandlers();
+
     this.barConstraintsRemoved = false;
     this.drawnPath = [];
     this.phase = 'DRAWING';
+  }
+
+  private setupCollisionHandlers() {
+    if (!this.physicsWorld) return;
+
+    Matter.Events.on(this.physicsWorld.engine, 'collisionStart', (event) => {
+      for (const pair of event.pairs) {
+        const labels = [pair.bodyA.label, pair.bodyB.label];
+        const bodies = [pair.bodyA, pair.bodyB];
+
+        // Check if ragdoll part is involved
+        const ragdollBodies = this.ragdoll?.getAllBodies() || [];
+        const ragdollInvolved = bodies.some(b => ragdollBodies.includes(b));
+        if (!ragdollInvolved) continue;
+
+        if (labels.includes('wall') || labels.includes('ceiling')) {
+          // Hit obstacle - death
+          if (this.phase === 'PLAYBACK') {
+            this.ragdoll?.goLoose();
+            this.phase = 'RESULT';
+          }
+        }
+        if (labels.includes('lava')) {
+          if (this.phase === 'PLAYBACK') {
+            this.ragdoll?.goLoose();
+            this.phase = 'RESULT';
+          }
+        }
+        if (labels.includes('landingPad')) {
+          if (this.phase === 'PLAYBACK' && this.barConstraintsRemoved) {
+            // Landed!
+            this.phase = 'RESULT';
+          }
+        }
+      }
+    });
   }
 
   startPlayback(path: Vector2[]) {
@@ -77,6 +124,9 @@ export class Game {
   }
 
   update(deltaMs: number) {
+    // Update obstacle renderer for lava animation
+    this.obstacleRenderer.update(deltaMs);
+
     this.accumulator += Math.min(deltaMs, 200);
 
     while (this.accumulator >= PHYSICS_TIMESTEP) {
@@ -165,10 +215,15 @@ export class Game {
   private renderLevel(ctx: CanvasRenderingContext2D) {
     if (!this.currentLevel) return;
 
+    // Draw obstacles
+    if (this.loadedLevel) {
+      for (const obs of this.loadedLevel.obstacles) {
+        this.obstacleRenderer.renderObstacle(ctx, obs.config);
+      }
+    }
+
     // Draw landing pad
-    const pad = this.currentLevel.landingPad;
-    ctx.fillStyle = COLORS.landingPad;
-    ctx.fillRect(pad.position.x, pad.position.y, pad.width, 8);
+    this.obstacleRenderer.renderLandingPad(ctx, this.currentLevel.landingPad);
 
     // Draw bar
     if (this.bar) {
