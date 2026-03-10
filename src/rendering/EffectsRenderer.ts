@@ -25,6 +25,7 @@ export class EffectsRenderer {
   private shakeOffsetX = 0;
   private shakeOffsetY = 0;
   private slowMotionTimer = 0;
+  private screenFlashAlpha = 0;
 
   getShakeOffset(): Vector2 { return { x: this.shakeOffsetX, y: this.shakeOffsetY }; }
   getTimeScale(): number { return this.slowMotionTimer > 0 ? 0.3 : 1; }
@@ -71,6 +72,14 @@ export class EffectsRenderer {
     this.triggerShake(8);
   }
 
+  spawnBarExplosion(position: Vector2) {
+    this.spawnParticles(position, 30, '#ff6600', 6);  // orange
+    this.spawnParticles(position, 25, '#e94560', 5);  // red
+    this.spawnParticles(position, 20, '#ffd700', 4);  // yellow/gold
+    this.triggerShake(20);
+    this.screenFlashAlpha = 1;
+  }
+
   update(deltaMs: number) {
     // Shake decay
     if (this.shakeIntensity > 0.1) {
@@ -85,6 +94,12 @@ export class EffectsRenderer {
 
     // Slow motion timer
     if (this.slowMotionTimer > 0) this.slowMotionTimer -= deltaMs;
+
+    // Screen flash decay
+    if (this.screenFlashAlpha > 0) {
+      this.screenFlashAlpha -= deltaMs / 150;
+      if (this.screenFlashAlpha < 0) this.screenFlashAlpha = 0;
+    }
 
     // Update particles
     for (const p of this.particles) {
@@ -140,6 +155,15 @@ export class EffectsRenderer {
     ctx.globalAlpha = 1;
   }
 
+  renderScreenFlash(ctx: CanvasRenderingContext2D, width: number, height: number) {
+    if (this.screenFlashAlpha > 0) {
+      ctx.globalAlpha = this.screenFlashAlpha * 0.7;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+      ctx.globalAlpha = 1;
+    }
+  }
+
   clearTrail() { this.trail = []; }
   clear() {
     this.trail = [];
@@ -147,5 +171,6 @@ export class EffectsRenderer {
     this.floatingTexts = [];
     this.shakeIntensity = 0;
     this.slowMotionTimer = 0;
+    this.screenFlashAlpha = 0;
   }
 }
