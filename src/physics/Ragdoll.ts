@@ -127,6 +127,26 @@ export class Ragdoll {
     }
   }
 
+  explode(origin: Vector2, force: number) {
+    this.isLoose = true;
+    this.isReleased = true;
+    this.barConstraintL = null;
+    this.barConstraintR = null;
+    for (const body of this.getAllBodies()) {
+      const dx = body.position.x - origin.x;
+      const dy = body.position.y - origin.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const fx = (dx / dist) * force;
+      const fy = (dy / dist) * force - force * 0.5; // bias upward
+      Matter.Body.applyForce(body, body.position, { x: fx, y: fy });
+      Matter.Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.3);
+    }
+  }
+
+  getBodyConstraints(): Matter.Constraint[] {
+    return this.constraints;
+  }
+
   /** Apply cartoon physics forces based on bar velocity */
   applyCartoonPhysics(barVelocity: Vector2) {
     if (this.isReleased) return;
