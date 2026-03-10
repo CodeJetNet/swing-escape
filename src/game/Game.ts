@@ -212,6 +212,21 @@ export class Game {
             this.audio.playThud();
             vibrate(200);
             this.ragdoll?.goLoose();
+
+            // Remove bar constraints if still attached
+            if (!this.barConstraintsRemoved) {
+              for (const constraint of this.ragdoll!.getBarConstraints()) {
+                this.physicsWorld!.removeConstraint(constraint);
+              }
+              this.ragdoll!.release();
+              this.barConstraintsRemoved = true;
+            }
+
+            // Break body apart — remove all body constraints
+            for (const constraint of this.ragdoll!.getBodyConstraints()) {
+              this.physicsWorld!.removeConstraint(constraint);
+            }
+
             this.landedOnPad = false;
             const impactPoint = this.ragdoll?.getFeetPosition() || { x: 0, y: 0 };
             this.deathZoom = { active: true, progress: 0, targetX: impactPoint.x, targetY: impactPoint.y, phase: 'zoomIn' };
@@ -225,6 +240,21 @@ export class Game {
             this.audio.playSplat();
             vibrate(200);
             this.ragdoll?.goLoose();
+
+            // Remove bar constraints if still attached
+            if (!this.barConstraintsRemoved) {
+              for (const constraint of this.ragdoll!.getBarConstraints()) {
+                this.physicsWorld!.removeConstraint(constraint);
+              }
+              this.ragdoll!.release();
+              this.barConstraintsRemoved = true;
+            }
+
+            // Break body apart — remove all body constraints
+            for (const constraint of this.ragdoll!.getBodyConstraints()) {
+              this.physicsWorld!.removeConstraint(constraint);
+            }
+
             this.landedOnPad = false;
             const impactPoint = this.ragdoll?.getFeetPosition() || { x: 0, y: 0 };
             this.deathZoom = { active: true, progress: 0, targetX: impactPoint.x, targetY: impactPoint.y, phase: 'zoomIn' };
@@ -246,6 +276,21 @@ export class Game {
             this.audio.playThud();
             vibrate(200);
             this.ragdoll?.goLoose();
+
+            // Remove bar constraints if still attached
+            if (!this.barConstraintsRemoved) {
+              for (const constraint of this.ragdoll!.getBarConstraints()) {
+                this.physicsWorld!.removeConstraint(constraint);
+              }
+              this.ragdoll!.release();
+              this.barConstraintsRemoved = true;
+            }
+
+            // Break body apart — remove all body constraints
+            for (const constraint of this.ragdoll!.getBodyConstraints()) {
+              this.physicsWorld!.removeConstraint(constraint);
+            }
+
             const impactPoint = this.ragdoll?.getFeetPosition() || { x: 0, y: 0 };
             this.deathZoom = { active: true, progress: 0, targetX: impactPoint.x, targetY: impactPoint.y, phase: 'zoomIn' };
             this.transitionToResult();
@@ -255,6 +300,57 @@ export class Game {
     };
 
     Matter.Events.on(this.physicsWorld.engine, 'collisionStart', this.collisionHandler);
+  }
+
+  private checkBarWallCollision(): Vector2 | null {
+    if (!this.bar || !this.loadedLevel) return null;
+    const barPos = this.bar.body.position;
+    const barRadius = 6;
+
+    for (const obs of this.loadedLevel.obstacles) {
+      const body = obs.body;
+      if (body.label !== 'wall' && body.label !== 'ceiling' && body.label !== 'window') continue;
+
+      const partsToCheck = body.parts.length > 1 ? body.parts.slice(1) : [body];
+      for (const part of partsToCheck) {
+        const bounds = part.bounds;
+        if (barPos.x + barRadius > bounds.min.x &&
+            barPos.x - barRadius < bounds.max.x &&
+            barPos.y + barRadius > bounds.min.y &&
+            barPos.y - barRadius < bounds.max.y) {
+          return { x: barPos.x, y: barPos.y };
+        }
+      }
+    }
+    return null;
+  }
+
+  private handleBarExplosion(impactPoint: Vector2) {
+    if (!this.ragdoll || !this.physicsWorld) return;
+
+    // Remove bar constraints
+    for (const constraint of this.ragdoll.getBarConstraints()) {
+      this.physicsWorld.removeConstraint(constraint);
+    }
+
+    // Remove all body constraints
+    for (const constraint of this.ragdoll.getBodyConstraints()) {
+      this.physicsWorld.removeConstraint(constraint);
+    }
+
+    // Explode ragdoll with strong force
+    this.ragdoll.explode(impactPoint, 0.05);
+
+    // Visual effects
+    this.effects.spawnBarExplosion(impactPoint);
+    this.audio.playThud();
+    vibrate([100, 50, 200, 50, 100]);
+
+    // Death zoom
+    this.deathZoom = { active: true, progress: 0, targetX: impactPoint.x, targetY: impactPoint.y, phase: 'zoomIn' };
+    this.landedOnPad = false;
+    this.barConstraintsRemoved = true;
+    this.transitionToResult();
   }
 
   private getComboColor(type: string): string {
@@ -418,6 +514,14 @@ export class Game {
         if (this.bar && this.ragdoll && this.physicsWorld) {
           const timeScale = this.effects.getTimeScale();
           this.bar.update();
+
+          // Check if bar hit a wall
+          const barWallHit = this.checkBarWallCollision();
+          if (barWallHit) {
+            this.handleBarExplosion(barWallHit);
+            break;
+          }
+
           this.ragdoll.applyCartoonPhysics(this.bar.getVelocity());
           this.physicsWorld.step(PHYSICS_TIMESTEP * timeScale);
 
@@ -630,6 +734,9 @@ export class Game {
     if (this.ragdoll) {
       this.characterRenderer.render(ctx, this.ragdoll);
     }
+
+    // Screen flash overlay
+    this.effects.renderScreenFlash(ctx, WORLD_WIDTH, WORLD_HEIGHT);
   }
 
   private renderResultOverlay(ctx: CanvasRenderingContext2D) {
