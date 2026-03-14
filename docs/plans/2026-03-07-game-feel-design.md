@@ -61,7 +61,7 @@ Sources:
 - Best score per level saved to localStorage
 - Stars remain based on line efficiency (unchanged)
 
-## Feature 3: Death Camera & Death Counter
+## Feature 3: Death Camera
 
 ### Impact Zoom
 - On death, zoom camera to 1.5x centered on impact point over 0.3s
@@ -69,12 +69,6 @@ Sources:
 - Zoom back out over 0.3s
 - ~1 second total before buttons appear
 - Implemented via canvas scale/translate interpolation in render loop
-
-### Death Counter
-- Persistent total deaths in localStorage
-- Displayed as small text in top-right during DRAWING/PLAYBACK: "Deaths: 47"
-- On death, counter increments with brief pulse animation
-- Also tracked per-level in GameState
 
 ## Feature 4: Victory Celebration
 
